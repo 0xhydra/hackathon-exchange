@@ -21,7 +21,8 @@ interface IFireFlyExchange {
         OrderStructs.Maker calldata makerBid,
         bytes calldata makerSignature
     )
-        external;
+        external
+        payable;
 
     /**
      * @notice This function allows a user to execute a taker bid (against a maker ask) - exchange
