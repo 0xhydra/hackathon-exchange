@@ -68,42 +68,37 @@ contract FireFlyExchange is
     /**
      * @inheritdoc IFireFlyExchange
      */
-    function executeMakerAsk(
-        OrderStructs.Taker calldata takerBid,
-        OrderStructs.Maker calldata makerAsk
+    function executeOrder(
+        OrderStructs.Maker calldata maker_,
+        OrderStructs.Taker calldata taker_
     )
         external
         payable
         nonReentrant
     {
-        bytes32 makerHash = makerAsk.hash();
+        bytes32 makerHash = maker_.hash();
+        address buyer = taker_.recipient;
 
         // Check the maker ask order
-        _validateOrder(makerAsk, makerHash, makerAsk.makerSignature);
+        _validateBasicOrderInfo(maker_);
+
+        _validateSignature(maker_.signer, makerHash, maker_.makerSignature);
+
+        if (maker_.collectionType == CollectionType.ERC6551) {
+            _validateAssetsInsideAccount(maker_.collection, maker_.tokenId, maker_.assets, maker_.values);
+        }
+
+        if (maker_.quoteType == QuoteType.Bid) _validateSignature(buyer, makerHash, taker_.takerSignature);
 
         // prevents replay
-        _setUsed(makerAsk.signer, makerAsk.orderNonce);
-
-        address buyer = takerBid.recipient;
+        _setUsed(maker_.signer, maker_.orderNonce);
 
         // Execute transfer currency
-        _transferFeesAndFunds(makerAsk.currency, buyer, makerAsk.signer, makerAsk.price);
+        _transferFeesAndFunds(maker_.currency, buyer, maker_.signer, maker_.price);
 
         // Execute transfer token collection
-        _transferNonFungibleToken(makerAsk.collection, makerAsk.signer, buyer, makerAsk.tokenId);
+        _transferNonFungibleToken(maker_.collection, maker_.signer, buyer, maker_.tokenId);
     }
-
-    /**
-     * @inheritdoc IFireFlyExchange
-     */
-    function executeMakerBid(
-        OrderStructs.Taker calldata takerAsk,
-        OrderStructs.Maker calldata makerBid
-    )
-        external
-        payable
-        nonReentrant
-    { }
 
     /**
      * @notice Transfer fees and funds to protocol recipient, and seller
@@ -130,14 +125,7 @@ contract FireFlyExchange is
      * @notice Verify the validity of the maker order
      * @param makerAsk maker ask
      */
-    function _validateOrder(
-        OrderStructs.Maker calldata makerAsk,
-        bytes32 makerHash,
-        bytes calldata makerSignature
-    )
-        private
-        view
-    {
+    function _validateBasicOrderInfo(OrderStructs.Maker calldata makerAsk) private view {
         // Verify the price is not 0
         if (makerAsk.price == 0) revert Exchange__ZeroValue();
 
@@ -149,28 +137,38 @@ contract FireFlyExchange is
 
         if (!hasRole(COLLECTION_ROLE, makerAsk.collection)) revert Exchange__InvalidCollection();
 
-        (address recoveredAddress,) = ECDSA.tryRecover(_hashTypedDataV4(makerHash), makerSignature);
-
-        // Verify the validity of the signature
-        if (recoveredAddress == address(0) || recoveredAddress != makerAsk.signer) revert Exchange__InvalidSigner();
-
         // Verify whether order nonce has expired
         if (makerAsk.orderNonce < _minNonce[makerAsk.signer]) revert Exchange__InvalidNonce();
 
         if (_isUsed(makerAsk.signer, makerAsk.orderNonce)) revert Exchange__InvalidNonce();
+    }
 
-        if (makerAsk.collectionType == CollectionType.ERC6551) {
-            address erc6551Account = _registry.account(_implementation, 1, makerAsk.collection, makerAsk.tokenId, 0);
-            uint256 length = makerAsk.items.length;
-            if (length != makerAsk.values.length) revert Exchange__LengthMisMatch();
+    function _validateSignature(address signer_, bytes32 hash_, bytes calldata signature_) internal view {
+        (address recoveredAddress,) = ECDSA.tryRecover(_hashTypedDataV4(hash_), signature_);
 
-            for (uint256 i = 0; i < length;) {
-                if (erc6551Account != _safeOwnerOf(makerAsk.items[i], makerAsk.values[i])) {
-                    revert Exchange__InvalidAsset();
-                }
-                unchecked {
-                    ++i;
-                }
+        // Verify the validity of the signature
+        if (recoveredAddress == address(0) || recoveredAddress != signer_) revert Exchange__InvalidSigner();
+    }
+
+    function _validateAssetsInsideAccount(
+        address collection,
+        uint256 tokenId,
+        address[] calldata assets,
+        uint256[] calldata values
+    )
+        internal
+        view
+    {
+        address erc6551Account = _registry.account(_implementation, 1, collection, tokenId, 0);
+        uint256 length = assets.length;
+        if (length != values.length) revert Exchange__LengthMisMatch();
+
+        for (uint256 i = 0; i < length;) {
+            if (erc6551Account != _safeOwnerOf(assets[i], values[i])) {
+                revert Exchange__InvalidAsset();
+            }
+            unchecked {
+                ++i;
             }
         }
     }

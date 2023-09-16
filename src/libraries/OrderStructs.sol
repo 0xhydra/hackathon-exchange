@@ -42,7 +42,7 @@ library OrderStructs {
         address signer;
         uint256 startTime;
         uint256 endTime;
-        address[] items;
+        address[] assets;
         uint256[] values;
         bytes makerSignature;
     }
@@ -69,10 +69,10 @@ library OrderStructs {
     /**
      * @notice This is the type hash constant used to compute the maker order hash.
      */
-    // keccak256("MakerOrder(uint8 quoteType,uint256 orderNonce,uint8 collectionType,address
-    // collection,address currency,uint256 price,address signer,uint256 startTime,uint256 endTime,uint256[]
-    // items,uint256[] tokenIds")
-    bytes32 internal constant _MAKER_TYPEHASH = 0x02ad754d807b2e74cb60c9192567a860b088907ad71511ce6877d595aa4bfe51;
+    // keccak256("Maker(uint8 quoteType,uint256 orderNonce,uint8 collectionType,address collection,uint256 tokenId,
+    // address currency,uint256 price,address signer,uint256 startTime,uint256 endTime,uint256[] assets,uint256[]
+    // values)")
+    bytes32 internal constant _MAKER_TYPEHASH = 0xdcf35f40270bbc1d190bf2c174faf269abe7629a0f11e68c19228e0c1ae65fcc;
 
     /**
      * 5. Hash functions
@@ -99,7 +99,7 @@ library OrderStructs {
                     maker.signer,
                     maker.startTime,
                     maker.endTime,
-                    keccak256(abi.encodePacked(maker.items)),
+                    keccak256(abi.encodePacked(maker.assets)),
                     keccak256(abi.encodePacked(maker.values))
                 )
             )
