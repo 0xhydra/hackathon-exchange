@@ -61,7 +61,7 @@ contract CurrencyManager {
         SafeTransfer.safeTransferETH(to_, value_);
     }
 
-    function _safeOwnerOf(address token_, uint256 tokenId_) private view returns (address owner) {
+    function _safeOwnerOf(address token_, uint256 tokenId_) internal view returns (address owner) {
         (bool success, bytes memory data) = token_.staticcall(abi.encodeCall(IERC721.ownerOf, (tokenId_)));
         if (success) {
             return abi.decode(data, (address));

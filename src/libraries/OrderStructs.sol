@@ -28,7 +28,8 @@ library OrderStructs {
      * @param startTime Start timestamp
      * @param endTime End timestamp
      * @param items Array of items
-     * @param tokenIds Array of tokenIds
+     * @param values Array of values
+     * @param makerSignature makerSignature (required);
      */
     struct Maker {
         QuoteType quoteType;
@@ -42,7 +43,8 @@ library OrderStructs {
         uint256 startTime;
         uint256 endTime;
         address[] items;
-        uint256[] tokenIds;
+        uint256[] values;
+        bytes makerSignature;
     }
 
     /**
@@ -53,7 +55,7 @@ library OrderStructs {
      * @notice Taker is the struct for a taker ask/bid order. It contains the parameters required for a direct purchase.
      * @dev Taker struct is matched against MakerAsk/MakerBid structs at the protocol level.
      * @param recipient Recipient address (to receive NFTs or non-fungible tokens)
-     * @param taker Extra data specific for the order
+     * @param takerSignature takerSignature(optional)
      */
     struct Taker {
         address recipient;
@@ -98,7 +100,7 @@ library OrderStructs {
                     maker.startTime,
                     maker.endTime,
                     keccak256(abi.encodePacked(maker.items)),
-                    keccak256(abi.encodePacked(maker.tokenIds))
+                    keccak256(abi.encodePacked(maker.values))
                 )
             )
         );

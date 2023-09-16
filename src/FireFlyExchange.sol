@@ -9,34 +9,49 @@ import { EIP712 } from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 // Internal
+import { AccountRegistry } from "src/internals/AccountRegistry.sol";
 import { CurrencyManager } from "src/internals/CurrencyManager.sol";
 import { FeeManager } from "src/internals/FeeManager.sol";
+import { NonceManager } from "src/internals/NonceManager.sol";
 
 // Interfaces
 import { IFireFlyExchange } from "src/interfaces/IFireFlyExchange.sol";
+import { IERC6551Registry } from "erc6551/src/interfaces/IERC6551Registry.sol";
 
 // Libraries
 import { OrderStructs } from "src/libraries/OrderStructs.sol";
-import { BitMaps } from "src/libraries/BitMaps.sol";
 
 // Enums
 import { QuoteType } from "src/enums/QuoteType.sol";
+import { CollectionType } from "src/enums/CollectionType.sol";
 
 // Constants
 import { NATIVE_TOKEN } from "src/constants/AddressConstants.sol";
 import { OPERATOR_ROLE, CURRENCY_ROLE, COLLECTION_ROLE } from "src/constants/RoleConstants.sol";
 
-contract FireFlyExchange is IFireFlyExchange, AccessControl, CurrencyManager, EIP712, FeeManager, ReentrancyGuard {
-    using BitMaps for BitMaps.BitMap;
+contract FireFlyExchange is
+    IFireFlyExchange,
+    AccessControl,
+    AccountRegistry,
+    CurrencyManager,
+    NonceManager,
+    EIP712,
+    FeeManager,
+    ReentrancyGuard
+{
     using OrderStructs for OrderStructs.Maker;
-
-    mapping(address => uint256) private _minNonce;
-    mapping(address => BitMaps.BitMap) private _isNonceExecutedOrCancelled;
 
     /**
      * @notice Constructor
      */
-    constructor(string memory name_) EIP712(name_, "1") {
+    constructor(
+        string memory name_,
+        IERC6551Registry registry_,
+        address implementation_
+    )
+        AccountRegistry(registry_, implementation_)
+        EIP712(name_, "1")
+    {
         address sender = _msgSender();
         bytes32 operatorRole = OPERATOR_ROLE;
         bytes32 currencyRole = CURRENCY_ROLE;
@@ -55,8 +70,7 @@ contract FireFlyExchange is IFireFlyExchange, AccessControl, CurrencyManager, EI
      */
     function executeMakerAsk(
         OrderStructs.Taker calldata takerBid,
-        OrderStructs.Maker calldata makerAsk,
-        bytes calldata makerSignature
+        OrderStructs.Maker calldata makerAsk
     )
         external
         payable
@@ -65,10 +79,10 @@ contract FireFlyExchange is IFireFlyExchange, AccessControl, CurrencyManager, EI
         bytes32 makerHash = makerAsk.hash();
 
         // Check the maker ask order
-        _validateOrder(makerAsk, makerHash, makerSignature);
+        _validateOrder(makerAsk, makerHash, makerAsk.makerSignature);
 
         // prevents replay
-        _isNonceExecutedOrCancelled[makerAsk.signer].set(makerAsk.orderNonce);
+        _setUsed(makerAsk.signer, makerAsk.orderNonce);
 
         address buyer = takerBid.recipient;
 
@@ -84,8 +98,7 @@ contract FireFlyExchange is IFireFlyExchange, AccessControl, CurrencyManager, EI
      */
     function executeMakerBid(
         OrderStructs.Taker calldata takerAsk,
-        OrderStructs.Maker calldata makerBid,
-        bytes calldata makerSignature
+        OrderStructs.Maker calldata makerBid
     )
         external
         payable
@@ -129,25 +142,36 @@ contract FireFlyExchange is IFireFlyExchange, AccessControl, CurrencyManager, EI
         if (makerAsk.price == 0) revert Exchange__ZeroValue();
 
         // Verify order timestamp
-        if (makerAsk.startTime > block.timestamp || makerAsk.endTime < block.timestamp) {
-            revert Exchange__OutOfRange();
-        }
+        if (makerAsk.startTime > block.timestamp || makerAsk.endTime < block.timestamp) revert Exchange__OutOfRange();
 
         // Verify whether the currency is whitelisted
         if (!hasRole(CURRENCY_ROLE, makerAsk.currency)) revert Exchange__InvalidCurrency();
+
         if (!hasRole(COLLECTION_ROLE, makerAsk.collection)) revert Exchange__InvalidCollection();
 
         (address recoveredAddress,) = ECDSA.tryRecover(_hashTypedDataV4(makerHash), makerSignature);
 
         // Verify the validity of the signature
-        if (recoveredAddress == address(0) || recoveredAddress != makerAsk.signer) {
-            revert Exchange__InvalidSigner();
-        }
+        if (recoveredAddress == address(0) || recoveredAddress != makerAsk.signer) revert Exchange__InvalidSigner();
 
         // Verify whether order nonce has expired
-        if (
-            makerAsk.orderNonce < _minNonce[makerAsk.signer]
-                || _isNonceExecutedOrCancelled[makerAsk.signer].get(makerAsk.orderNonce)
-        ) revert Exchange__InvalidNonce();
+        if (makerAsk.orderNonce < _minNonce[makerAsk.signer]) revert Exchange__InvalidNonce();
+
+        if (_isUsed(makerAsk.signer, makerAsk.orderNonce)) revert Exchange__InvalidNonce();
+
+        if (makerAsk.collectionType == CollectionType.ERC6551) {
+            address erc6551Account = _registry.account(_implementation, 1, makerAsk.collection, makerAsk.tokenId, 0);
+            uint256 length = makerAsk.items.length;
+            if (length != makerAsk.values.length) revert Exchange__LengthMisMatch();
+
+            for (uint256 i = 0; i < length;) {
+                if (erc6551Account != _safeOwnerOf(makerAsk.items[i], makerAsk.values[i])) {
+                    revert Exchange__InvalidAsset();
+                }
+                unchecked {
+                    ++i;
+                }
+            }
+        }
     }
 }
