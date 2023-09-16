@@ -10,7 +10,6 @@ contract FireFlyExchange is IFireFlyExchange {
     /**
      * @inheritdoc IFireFlyExchange
      */
-
     function executeMakerBid(
         OrderStructs.Taker calldata takerAsk,
         OrderStructs.Maker calldata makerBid,
