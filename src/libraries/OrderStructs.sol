@@ -21,6 +21,7 @@ library OrderStructs {
      * @param orderNonce Order nonce (it can be shared across bid/ask maker orders)
      * @param collectionType Collection type (i.e. 0 = ERC721, 1 = ERC6551)
      * @param collection Collection address
+     * @param tokenId TokenId
      * @param currency Currency address (@dev address(0) = ETH)
      * @param price Minimum price for maker ask, maximum price for maker bid
      * @param signer Signer address
@@ -34,6 +35,7 @@ library OrderStructs {
         uint256 orderNonce;
         CollectionType collectionType;
         address collection;
+        uint256 tokenId;
         address currency;
         uint256 price;
         address signer;
@@ -89,6 +91,7 @@ library OrderStructs {
                     maker.orderNonce,
                     maker.collectionType,
                     maker.collection,
+                    maker.tokenId,
                     maker.currency,
                     maker.price,
                     maker.signer,
