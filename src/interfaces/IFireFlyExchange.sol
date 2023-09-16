@@ -9,6 +9,13 @@ import { OrderStructs } from "../libraries/OrderStructs.sol";
  * @author FireFly team
  */
 interface IFireFlyExchange {
+    error Exchange__ZeroValue();
+    error Exchange__OutOfRange();
+    error Exchange__InvalidNonce();
+    error Exchange__InvalidCurrency();
+    error Exchange__InvalidCollection();
+    error Exchange__InvalidSigner();
+
     /**
      * @notice This function allows a user to execute a taker ask (against a maker bid) - auction
      * The bid price represents the maximum price that a buyer is willing to pay for security

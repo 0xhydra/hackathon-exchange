@@ -24,6 +24,7 @@ import { QuoteType } from "src/enums/QuoteType.sol";
 
 // Constants
 import { NATIVE_TOKEN } from "src/constants/AddressConstants.sol";
+import { OPERATOR_ROLE, CURRENCY_ROLE, COLLECTION_ROLE } from "src/constants/RoleConstants.sol";
 
 contract FireFlyExchange is IFireFlyExchange, AccessControl, CurrencyManager, EIP712, FeeManager, ReentrancyGuard {
     using BitMaps for BitMaps.BitMap;
@@ -35,7 +36,19 @@ contract FireFlyExchange is IFireFlyExchange, AccessControl, CurrencyManager, EI
     /**
      * @notice Constructor
      */
-    constructor(string memory name_) EIP712(name_, "1") { }
+    constructor(string memory name_) EIP712(name_, "1") {
+        address sender = _msgSender();
+        bytes32 operatorRole = OPERATOR_ROLE;
+        bytes32 currencyRole = CURRENCY_ROLE;
+        bytes32 collectionRole = COLLECTION_ROLE;
+
+        _grantRole(DEFAULT_ADMIN_ROLE, sender);
+        _grantRole(operatorRole, sender);
+        _grantRole(currencyRole, address(0));
+
+        _setRoleAdmin(currencyRole, operatorRole);
+        _setRoleAdmin(collectionRole, operatorRole);
+    }
 
     /**
      * @inheritdoc IFireFlyExchange
@@ -111,5 +124,30 @@ contract FireFlyExchange is IFireFlyExchange, AccessControl, CurrencyManager, EI
     )
         private
         view
-    { }
+    {
+        // Verify the price is not 0
+        if (makerAsk.price == 0) revert Exchange__ZeroValue();
+
+        // Verify order timestamp
+        if (makerAsk.startTime > block.timestamp || makerAsk.endTime < block.timestamp) {
+            revert Exchange__OutOfRange();
+        }
+
+        // Verify whether the currency is whitelisted
+        if (!hasRole(CURRENCY_ROLE, makerAsk.currency)) revert Exchange__InvalidCurrency();
+        if (!hasRole(COLLECTION_ROLE, makerAsk.collection)) revert Exchange__InvalidCollection();
+
+        (address recoveredAddress,) = ECDSA.tryRecover(_hashTypedDataV4(makerHash), makerSignature);
+
+        // Verify the validity of the signature
+        if (recoveredAddress == address(0) || recoveredAddress != makerAsk.signer) {
+            revert Exchange__InvalidSigner();
+        }
+
+        // Verify whether order nonce has expired
+        if (
+            makerAsk.orderNonce < _minNonce[makerAsk.signer]
+                || _isNonceExecutedOrCancelled[makerAsk.signer].get(makerAsk.orderNonce)
+        ) revert Exchange__InvalidNonce();
+    }
 }
