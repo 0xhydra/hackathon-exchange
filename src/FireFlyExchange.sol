@@ -13,6 +13,7 @@ import { AccountRegistry } from "src/internals/AccountRegistry.sol";
 import { CurrencyManager } from "src/internals/CurrencyManager.sol";
 import { FeeManager } from "src/internals/FeeManager.sol";
 import { NonceManager } from "src/internals/NonceManager.sol";
+import { WrappedNativeReceiver } from "src/internals/WrappedNativeReceiver.sol";
 
 // Interfaces
 import { IFireFlyExchange } from "src/interfaces/IFireFlyExchange.sol";
@@ -30,6 +31,10 @@ import { CollectionType } from "src/enums/CollectionType.sol";
 import { NATIVE_TOKEN, WRAP_NATIVE } from "src/constants/AddressConstants.sol";
 import { OPERATOR_ROLE, CURRENCY_ROLE, COLLECTION_ROLE } from "src/constants/RoleConstants.sol";
 
+/**
+ * @author Felix and friends team (💕)
+ */
+
 contract FireFlyExchange is
     IFireFlyExchange,
     AccessControl,
@@ -38,24 +43,22 @@ contract FireFlyExchange is
     NonceManager,
     EIP712,
     FeeManager,
-    ReentrancyGuard
+    ReentrancyGuard,
+    WrappedNativeReceiver
 {
     using OrderStructs for OrderStructs.Maker;
-
-    receive() external payable {
-        assert(msg.sender == WRAP_NATIVE); // only accept WKLAY via fallback from the WKLAY contract
-    }
 
     /**
      * @notice Constructor
      */
     constructor(
         string memory name_,
-        IERC6551Registry registry_,
+        string memory version_,
+        address registry_,
         address implementation_
     )
         AccountRegistry(registry_, implementation_)
-        EIP712(name_, "1")
+        EIP712(name_, version_)
     {
         address sender = _msgSender();
         bytes32 operatorRole = OPERATOR_ROLE;
@@ -82,7 +85,7 @@ contract FireFlyExchange is
         nonReentrant
     {
         bytes32 makerHash = maker_.hash();
-        address buyer = taker_.recipient;
+        address currency = maker_.currency;
 
         // Check the maker ask order
         _validateBasicOrderInfo(maker_);
@@ -96,16 +99,16 @@ contract FireFlyExchange is
         // prevents replay
         _setUsed(maker_.signer, maker_.orderNonce);
 
-        // Execute transfer currency
         if (maker_.quoteType == QuoteType.Bid) {
-            _validateSignature(buyer, makerHash, taker_.takerSignature);
-            _transferFeesAndFunds(maker_.currency, buyer, maker_.signer, maker_.price);
-        } else {
-            _transferFeesAndFunds(maker_.currency, buyer, maker_.signer, maker_.price);
+            _validateSignature(taker_.recipient, makerHash, taker_.takerSignature);
+            if (currency == address(0)) currency = WRAP_NATIVE;
         }
 
+        // Execute transfer currency
+        _transferFeesAndFunds(currency, taker_.recipient, maker_.signer, maker_.price);
+
         // Execute transfer token collection
-        _transferNonFungibleToken(maker_.collection, maker_.signer, buyer, maker_.tokenId);
+        _transferNonFungibleToken(maker_.collection, maker_.signer, taker_.recipient, maker_.tokenId);
 
         emit OrderExecuted(
             maker_.quoteType,
@@ -147,7 +150,7 @@ contract FireFlyExchange is
 
     /**
      * @notice Verify the validity of the maker order
-     * @param makerAsk maker ask
+     * @param makerAsk maker order
      */
     function _validateBasicOrderInfo(OrderStructs.Maker calldata makerAsk) private view {
         // Verify the price is not 0
@@ -183,7 +186,7 @@ contract FireFlyExchange is
         internal
         view
     {
-        address erc6551Account = _registry.account(_implementation, 1, collection, tokenId, 0);
+        address erc6551Account = _registry.account(_implementation, block.chainid, collection, tokenId, 0);
         uint256 length = assets.length;
         if (length != values.length) revert Exchange__LengthMisMatch();
 

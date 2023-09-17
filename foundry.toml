@@ -2,10 +2,8 @@
 
 [profile.default]
   auto_detect_solc = false
-  block_timestamp = 1_680_220_800 # March 31, 2023 at 00:00 GMT
   bytecode_hash = "none"
   cbor_metadata = false
-  evm_version = "paris"
   fuzz = { runs = 1_000 }
   gas_reports = ["*"]
   libs = ["lib"]
@@ -22,8 +20,6 @@
   verbosity = 4
 
 [etherscan]
-  avalanche = { key = "${API_KEY_SNOWTRACE}" }
-  fuji = { key = "${API_KEY_SNOWTRACE}" }
   goerli = { key = "${API_KEY_ETHERSCAN}" }
   mainnet = { key = "${API_KEY_ETHERSCAN}" }
 
@@ -38,7 +34,8 @@
   wrap_comments = true
 
 [rpc_endpoints]
-  fuji = "https://avalanche-fuji-c-chain.publicnode.com"
+  klaytn = "https://klaytn.api.onfinality.io/public"
+  baobab = "https://api.baobab.klaytn.net:8651"
   mainnet = "https://eth.llamarpc.com"
   goerli = "https://goerli.infura.io/v3/${API_KEY_INFURA}"
   

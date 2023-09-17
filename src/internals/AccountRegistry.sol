@@ -9,8 +9,8 @@ contract AccountRegistry is AccessControl {
     IERC6551Registry internal _registry;
     address internal _implementation;
 
-    constructor(IERC6551Registry registry_, address implementation_) {
-        _setRegistryInfo(registry_, implementation_);
+    constructor(address registry_, address implementation_) {
+        _setRegistryInfo(IERC6551Registry(registry_), implementation_);
     }
 
     function _setRegistryInfo(IERC6551Registry registry_, address implementation_) internal {
