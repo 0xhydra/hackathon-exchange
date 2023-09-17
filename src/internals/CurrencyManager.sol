@@ -29,7 +29,7 @@ contract CurrencyManager {
     function _receiveNative(uint256 amount_) internal {
         uint256 refund = msg.value - amount_; // throw error if msg.value < amount
         if (refund == 0) return;
-        _safeTransferNativeToken(msg.sender, refund);
+        SafeTransfer.safeTransferETH(msg.sender, amount_);
     }
 
     /// @dev Transfers a given amount of currency.
@@ -38,14 +38,14 @@ contract CurrencyManager {
         if (from_ == to_) return;
 
         if (currency_ == NATIVE_TOKEN) {
-            _safeTransferNativeToken(to_, amount_);
+            SafeTransfer.safeTransferETH(to_, amount_);
         } else {
             _safeTransferERC20(currency_, from_, to_, amount_);
         }
     }
 
     /// @dev Transfer `amount` of ERC20 token from `from` to `to`.
-    function _safeTransferERC20(address currency_, address from_, address to_, uint256 amount_) private {
+    function _safeTransferERC20(address currency_, address from_, address to_, uint256 amount_) internal {
         if (from_ == to_) return;
 
         if (from_ == address(this)) {
@@ -53,12 +53,6 @@ contract CurrencyManager {
         } else {
             SafeTransfer.safeTransferFrom(currency_, from_, to_, amount_);
         }
-    }
-
-    /// @dev Transfers `amount` of native token to `to`.
-    function _safeTransferNativeToken(address to_, uint256 value_) private {
-        if (to_ == address(this)) return;
-        SafeTransfer.safeTransferETH(to_, value_);
     }
 
     function _safeOwnerOf(address token_, uint256 tokenId_) internal view returns (address owner) {

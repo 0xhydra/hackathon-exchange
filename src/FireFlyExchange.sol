@@ -16,6 +16,7 @@ import { NonceManager } from "src/internals/NonceManager.sol";
 
 // Interfaces
 import { IFireFlyExchange } from "src/interfaces/IFireFlyExchange.sol";
+import { IWKLAY } from "src/interfaces/IWKLAY.sol";
 import { IERC6551Registry } from "erc6551/src/interfaces/IERC6551Registry.sol";
 
 // Libraries
@@ -26,7 +27,7 @@ import { QuoteType } from "src/enums/QuoteType.sol";
 import { CollectionType } from "src/enums/CollectionType.sol";
 
 // Constants
-import { NATIVE_TOKEN } from "src/constants/AddressConstants.sol";
+import { NATIVE_TOKEN, WRAP_NATIVE } from "src/constants/AddressConstants.sol";
 import { OPERATOR_ROLE, CURRENCY_ROLE, COLLECTION_ROLE } from "src/constants/RoleConstants.sol";
 
 contract FireFlyExchange is
@@ -40,6 +41,10 @@ contract FireFlyExchange is
     ReentrancyGuard
 {
     using OrderStructs for OrderStructs.Maker;
+
+    receive() external payable {
+        assert(msg.sender == WRAP_NATIVE); // only accept WKLAY via fallback from the WKLAY contract
+    }
 
     /**
      * @notice Constructor
@@ -98,6 +103,18 @@ contract FireFlyExchange is
 
         // Execute transfer token collection
         _transferNonFungibleToken(maker_.collection, maker_.signer, buyer, maker_.tokenId);
+
+        emit OrderExecuted(
+            maker_.quoteType,
+            maker_.orderNonce,
+            maker_.collectionType,
+            maker_.collection,
+            maker_.tokenId,
+            maker_.currency,
+            maker_.price,
+            maker_.signer,
+            taker_.recipient
+        );
     }
 
     /**
@@ -116,7 +133,11 @@ contract FireFlyExchange is
         // 1. Protocol fee
 
         // 2. Transfer final amount (post-fees) to seller
-        {
+        if (currency_ == WRAP_NATIVE) {
+            _transferCurrency(currency_, from_, address(this), finalSellerAmount);
+            IWKLAY(WRAP_NATIVE).withdraw(finalSellerAmount);
+            _transferCurrency(NATIVE_TOKEN, from_, to_, finalSellerAmount);
+        } else {
             _transferCurrency(currency_, from_, to_, finalSellerAmount);
         }
     }

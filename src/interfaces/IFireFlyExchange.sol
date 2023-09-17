@@ -3,11 +3,13 @@ pragma solidity 0.8.19;
 
 // Libraries
 import { OrderStructs } from "src/libraries/OrderStructs.sol";
-
+import { CollectionType } from "../enums/CollectionType.sol";
+import { QuoteType } from "../enums/QuoteType.sol";
 /**
  * @title IFireFlyExchange
  * @author FireFly team
  */
+
 interface IFireFlyExchange {
     error Exchange__ZeroValue();
     error Exchange__OutOfRange();
@@ -29,4 +31,16 @@ interface IFireFlyExchange {
      * @param taker Maker struct
      */
     function executeOrder(OrderStructs.Maker calldata maker, OrderStructs.Taker calldata taker) external payable;
+
+    event OrderExecuted(
+        QuoteType quoteType,
+        uint256 orderNonce,
+        CollectionType collectionType,
+        address collection,
+        uint256 tokenId,
+        address currency,
+        uint256 price,
+        address seller,
+        address recipient
+    );
 }
