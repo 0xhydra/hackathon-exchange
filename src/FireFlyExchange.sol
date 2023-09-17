@@ -93,13 +93,16 @@ contract FireFlyExchange is
             _validateAssetsInsideAccount(maker_.collection, maker_.tokenId, maker_.assets, maker_.values);
         }
 
-        if (maker_.quoteType == QuoteType.Bid) _validateSignature(buyer, makerHash, taker_.takerSignature);
-
         // prevents replay
         _setUsed(maker_.signer, maker_.orderNonce);
 
         // Execute transfer currency
-        _transferFeesAndFunds(maker_.currency, buyer, maker_.signer, maker_.price);
+        if (maker_.quoteType == QuoteType.Bid) {
+            _validateSignature(buyer, makerHash, taker_.takerSignature);
+            _transferFeesAndFunds(maker_.currency, buyer, maker_.signer, maker_.price);
+        } else {
+            _transferFeesAndFunds(maker_.currency, buyer, maker_.signer, maker_.price);
+        }
 
         // Execute transfer token collection
         _transferNonFungibleToken(maker_.collection, maker_.signer, buyer, maker_.tokenId);
@@ -136,7 +139,7 @@ contract FireFlyExchange is
         if (currency_ == WRAP_NATIVE) {
             _transferCurrency(currency_, from_, address(this), finalSellerAmount);
             IWKLAY(WRAP_NATIVE).withdraw(finalSellerAmount);
-            _transferCurrency(NATIVE_TOKEN, from_, to_, finalSellerAmount);
+            _transferCurrency(NATIVE_TOKEN, address(this), to_, finalSellerAmount);
         } else {
             _transferCurrency(currency_, from_, to_, finalSellerAmount);
         }
